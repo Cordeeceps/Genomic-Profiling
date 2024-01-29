@@ -1,0 +1,512 @@
+# probeMap = probe names
+probeMap <- blca_counts$gencode.v22.annotation.gene.probeMap
+# Y = pheno data
+Y <- blca_pheno
+# 'change '.' to '-' so sample ID format is consistent
+colnames(X) <- gsub('\\.', '-', colnames(X))
+# Keep only the '01A' tumor samples
+g <- grep('01A$', colnames(X))
+X <- X[,g]
+# match expression data to clinical data
+common_samples <- intersect(colnames(X), Y$submitter_id.samples)
+mx <- match(common_samples, colnames(X))
+my <- match(common_samples, Y$submitter_id.samples)
+X <- X[,mx]
+Y <- Y[my,]
+# Make sure that the samples match -- if they don't, this will produce an error
+stopifnot(all(colnames(X) == Y$submitter_id.samples))
+# convert from log2(count + 1) to count data
+X <- round(2**X - 1)
+# remove genes with low counts
+dge <- DGEList(counts=X)
+keep <- filterByExpr(dge,min.prop = .10 )
+dge <- dge[keep,,keep.lib.sizes=FALSE]
+# apply TMM normalization, which computes the normalization
+# factors. The actual normalization is done in a later step
+dge <- calcNormFactors(dge, method = "TMM")
+# Calculate the log CPM values, using the normalization factors;
+# 3 counts are added to each observation to prevent log 0 values
+logCPM <- cpm(dge, log = TRUE, prior.count = 3)
+gender = Y$gender.demographic
+logCPM
+View(logCPM)
+library(dplyr)
+library(ggplot2)
+library(UCSCXenaTools) # needed to retrieve data
+library(edgeR) # needed for processing, such as TMM
+library(limma) # needed to find DE probes
+library(class) # for knn
+data(XenaData)
+# limit to desired cohort
+cbttc <- XenaData %>% filter(XenaCohorts == 'Pediatric Brain Tumor Atlas: CBTTC')
+# Get the clinical data
+cli_query = cbttc %>%
+filter(Label == "Participants information") %>%  # select clinical dataset
+XenaGenerate() %>%  # generate a XenaHub object
+XenaQuery() %>%     # generate the query
+XenaDownload()      # download the data
+# prepare (load) the data into R
+cbttc_part = XenaPrepare(cli_query)
+# Get the RSEM expected_count
+# instead of HTSeq - Counts in our case
+cli_query <- cbttc %>% filter(Label == 'RSEM expected_count') %>%
+XenaGenerate() %>%  # generate a XenaHub object
+XenaQuery() %>%
+XenaDownload(download_probeMap = TRUE)
+# prepare (load) the data into R
+cbttc_counts <- XenaPrepare(cli_query)
+# do you guy's think we should keep the gene ID's, such as,
+# 'ENSG00000000003.14_TSPAN6' for the rows because as we continue, we lose them
+# and we just have the row numbers
+X <- data.frame(cbttc_counts$CBTTC_rsem.genes_expected_count.txt.gz)
+rownames(X) <- X$Ensembl_ID
+# probeMap = probe names
+probeMap <- cbttc_counts$cavaticaKidsFirst_gencode.v27.primary_assembly.annotation.gene.probemap
+# participants info
+Y <- cbttc_part
+# remove dots and replace with dashes for formatting consistancy
+colnames(X) <- gsub('\\.', '-', colnames(X))
+# filter out unknown races
+Y <- filter(Y, Race != 'Reported Unknown')
+# match expression data to clinical data
+common_samples <- intersect(colnames(X), Y$xena_sample)
+mx <- match(common_samples, colnames(X))
+my <- match(common_samples, Y$xena_sample)
+X <- X[,mx]
+Y <- Y[my,]
+# Make sure that the samples match -- if they don't, this will produce an error
+stopifnot(all(colnames(X) == Y$xena_sample))
+# Removing genes with lower counts
+dge <- DGEList(counts = X)
+keep <- filterByExpr(dge,  min.prop = .10)
+dge <- dge[keep,,keep.lib.sizes=FALSE]
+# Applying normalization
+dge <- calcNormFactors(dge, method = 'TMM')
+# Calculating logCPM values
+logCPM <- cpm(dge, log=TRUE, prior.count = 3)
+View(logCPM)
+View(logCPM)
+boxplot(logCPM[,1:10], main='CBTTC Brain Tumor')
+boxplot(logCPM[,1:10], main='CBTTC Brain Tumor', ylab = "Log 2 Expression or Gene Expression")
+library(dplyr)
+library(ggplot2)
+library(UCSCXenaTools) # needed to retrieve data
+library(edgeR) # needed for processing, such as TMM
+library(limma) # needed to find DE probes
+library(class) # for knn
+data(XenaData)
+# limit to desired cohort
+cbttc <- XenaData %>% filter(XenaCohorts == 'Pediatric Brain Tumor Atlas: CBTTC')
+# Get the clinical data
+cli_query = cbttc %>%
+filter(Label == "Participants information") %>%  # select clinical dataset
+XenaGenerate() %>%  # generate a XenaHub object
+XenaQuery() %>%     # generate the query
+XenaDownload()      # download the data
+# prepare (load) the data into R
+cbttc_part = XenaPrepare(cli_query)
+# Get the RSEM expected_count
+# instead of HTSeq - Counts in our case
+cli_query <- cbttc %>% filter(Label == 'RSEM expected_count') %>%
+XenaGenerate() %>%  # generate a XenaHub object
+XenaQuery() %>%
+XenaDownload(download_probeMap = TRUE)
+# prepare (load) the data into R
+cbttc_counts <- XenaPrepare(cli_query)
+# do you guy's think we should keep the gene ID's, such as,
+# 'ENSG00000000003.14_TSPAN6' for the rows because as we continue, we lose them
+# and we just have the row numbers
+X <- data.frame(cbttc_counts$CBTTC_rsem.genes_expected_count.txt.gz)
+rownames(X) <- X$Ensembl_ID
+# probeMap = probe names
+probeMap <- cbttc_counts$cavaticaKidsFirst_gencode.v27.primary_assembly.annotation.gene.probemap
+# participants info
+Y <- cbttc_part
+# remove dots and replace with dashes for formatting consistancy
+colnames(X) <- gsub('\\.', '-', colnames(X))
+# filter out unknown races
+Y <- filter(Y, Race != 'Reported Unknown')
+# match expression data to clinical data
+common_samples <- intersect(colnames(X), Y$xena_sample)
+mx <- match(common_samples, colnames(X))
+my <- match(common_samples, Y$xena_sample)
+X <- X[,mx]
+Y <- Y[my,]
+# Make sure that the samples match -- if they don't, this will produce an error
+stopifnot(all(colnames(X) == Y$xena_sample))
+# Removing genes with lower counts
+dge <- DGEList(counts = X)
+keep <- filterByExpr(dge,  min.prop = .10)
+dge <- dge[keep,,keep.lib.sizes=FALSE]
+# Applying normalization
+dge <- calcNormFactors(dge, method = 'TMM')
+# Calculating logCPM values
+logCPM <- cpm(dge, log=TRUE, prior.count = 3)
+boxplot(logCPM[,1:10], main='CBTTC Brain Tumor',
+ylab = "Log 2 Expression or Gene Expression")
+nrow(X)
+View(X)
+ncol(X)
+View(probeMap)
+View(cbttc_counts)
+View(Y)
+# construct design matrix filtering out "more than one race"
+Y <- filter(Y, Race != "More Than One Race" )
+race <- Y$Race
+race
+# fits a linear model to each row of the expression matrix
+fit <- lmFit(logCPM, design)
+# change the column names
+design <- model.matrix(~-1 + race)
+colnames(design) <- c("Alaskan Native", "Asian", "African American",
+"Hawaiian Native", "Caucasian")
+# fits a linear model to each row of the expression matrix
+fit <- lmFit(logCPM, design)
+design
+# construct design matrix
+race <- Y$Race
+design <- model.matrix(~-1+race)
+design
+table(design)
+table(race)
+# let's change the column names -- we need to reference them below
+colnames(design) <- c("Native American", "Asian", "African American", "Native Hawaiian")
+# let's change the column names -- we need to reference them below
+colnames(design) <- c("Native American", "Asian", "African American",
+"Native Hawaiian", "White")
+# 'lmFit' fits a linear model to each row of the expression matrix ##
+fit <- lmFit(logCPM, design)
+View(design)
+con.matrix <- makeContrasts(LG-HG, levels = design)
+con.matrix <- makeContrasts(LG-HG, levels = design)
+# construct design matrix
+race <- Y$Race
+design <- model.matrix(~-1+race)
+table(race)
+con.matrix <- makeContrasts(LG-HG, levels = design)
+help(make.names)
+# construct design matrix
+race <- Y$Race
+design <- model.matrix(~-1+race)
+table(race)
+# let's change the column names -- we need to reference them below
+colnames(design) <- c("Native", "Asian", "Black",
+"Hawaiian", "White")
+con.matrix <- makeContrasts(LG-HG, levels = design)
+con.matrix <- makeContrasts(race, levels = design)
+con.matrix = makeContrasts(Native-White, levels = design)
+con.matrix
+con.matrix = makeContrasts(Native-Asian-Black-Hawaiian-White, levels = design)
+con.matrix
+fit <- contrasts.fit(fit, con.matrix)
+fit <- lmFit(logCPM, design)
+fit <- lmFit(logCPM, design)
+View(logCPM)
+library(dplyr)
+library(ggplot2)
+library(UCSCXenaTools) # needed to retreive data
+library(edgeR) # needed for processing, such as TMM
+library(limma) # needed to find DE probes
+data(XenaData)
+# limit to desired cohort
+blca <- XenaData %>% filter(XenaCohorts == 'GDC TCGA Bladder Cancer (BLCA)')
+# Get the phenotype / clinical data
+cli_query = blca %>%
+filter(Label == "Phenotype") %>%  # select clinical dataset
+XenaGenerate() %>%  # generate a XenaHub object
+XenaQuery() %>%     # generate the query
+XenaDownload()      # download the data
+# prepare (load) the data into R
+blca_pheno <- XenaPrepare(cli_query)
+# Get the RNA-seq data, including the "probe map"
+cli_query <- blca %>% filter(Label == 'HTSeq - Counts') %>%
+XenaGenerate() %>%  # generate a XenaHub object
+XenaQuery() %>%
+XenaDownload(download_probeMap = TRUE)
+# prepare (load) the data into R
+blca_counts <- XenaPrepare(cli_query)
+X <- data.frame(blca_counts$TCGA.BLCA.htseq_counts.tsv.gz)
+rownames(X) <- X$Ensembl_ID
+X <- X[,-1]  # remove the probe name column
+# probeMap = probe names
+probeMap <- blca_counts$gencode.v22.annotation.gene.probeMap
+# Y = pheno data
+Y <- blca_pheno
+# 'change '.' to '-' so sample ID format is consistent
+colnames(X) <- gsub('\\.', '-', colnames(X))
+# Keep only the '01A' tumor samples
+g <- grep('01A$', colnames(X))
+X <- X[,g]
+# match expression data to clinical data
+common_samples <- intersect(colnames(X), Y$submitter_id.samples)
+mx <- match(common_samples, colnames(X))
+my <- match(common_samples, Y$submitter_id.samples)
+X <- X[,mx]
+Y <- Y[my,]
+# Make sure that the samples match -- if they don't, this will produce an error
+stopifnot(all(colnames(X) == Y$submitter_id.samples))
+# convert from log2(count + 1) to count data
+X <- round(2**X - 1)
+# remove genes with low counts
+dge <- DGEList(counts=X)
+keep <- filterByExpr(dge,min.prop = .10 )
+dge <- dge[keep,,keep.lib.sizes=FALSE]
+# apply TMM normalization, which computes the normalization
+# factors. The actual normalization is done in a later step
+dge <- calcNormFactors(dge, method = "TMM")
+# Calculate the log CPM values, using the normalization factors;
+# 3 counts are added to each observation to prevent log 0 values
+logCPM <- cpm(dge, log = TRUE, prior.count = 3)
+gender = Y$gender.demographic
+design = model.matrix(~-1+gender)
+colnames(design) = c("Female", "Male")
+#logCPM = b1*1 + b2*0
+#b1 is the mean expression for females
+b1 = mean(design[,1])
+b1
+#b2 is the mean expression for males
+b2 = mean(design[,2])
+b2
+fit = lmFit(logCPM, design)
+View(logCPM)
+library(dplyr)
+library(ggplot2)
+library(UCSCXenaTools) # needed to retrieve data
+library(edgeR) # needed for processing, such as TMM
+library(limma) # needed to find DE probes
+library(class) # for knn
+data(XenaData)
+# limit to desired cohort
+cbttc <- XenaData %>% filter(XenaCohorts == 'Pediatric Brain Tumor Atlas: CBTTC')
+# Get the clinical data
+cli_query = cbttc %>%
+filter(Label == "Participants information") %>%  # select clinical dataset
+XenaGenerate() %>%  # generate a XenaHub object
+XenaQuery() %>%     # generate the query
+XenaDownload()      # download the data
+# prepare (load) the data into R
+cbttc_part = XenaPrepare(cli_query)
+# Get the RSEM expected_count
+# instead of HTSeq - Counts in our case
+cli_query <- cbttc %>% filter(Label == 'RSEM expected_count') %>%
+XenaGenerate() %>%  # generate a XenaHub object
+XenaQuery() %>%
+XenaDownload(download_probeMap = TRUE)
+# prepare (load) the data into R
+cbttc_counts <- XenaPrepare(cli_query)
+# do you guy's think we should keep the gene ID's, such as,
+# 'ENSG00000000003.14_TSPAN6' for the rows because as we continue, we lose them
+# and we just have the row numbers
+X <- data.frame(cbttc_counts$CBTTC_rsem.genes_expected_count.txt.gz)
+rownames(X) <- X$Ensembl_ID
+# probeMap = probe names
+probeMap <- cbttc_counts$cavaticaKidsFirst_gencode.v27.primary_assembly.annotation.gene.probemap
+# participants info
+Y <- cbttc_part
+# remove dots and replace with dashes for formatting consistancy
+colnames(X) <- gsub('\\.', '-', colnames(X))
+# filter out unknown races
+Y <- filter(Y, Race != 'Reported Unknown')
+# match expression data to clinical data
+common_samples <- intersect(colnames(X), Y$xena_sample)
+mx <- match(common_samples, colnames(X))
+my <- match(common_samples, Y$xena_sample)
+X <- X[,mx]
+Y <- Y[my,]
+# Make sure that the samples match -- if they don't, this will produce an error
+stopifnot(all(colnames(X) == Y$xena_sample))
+# Removing genes with lower counts
+dge <- DGEList(counts = X)
+keep <- filterByExpr(dge,  min.prop = .10)
+dge <- dge[keep,,keep.lib.sizes=FALSE]
+# Applying normalization
+dge <- calcNormFactors(dge, method = 'TMM')
+# Calculating logCPM values
+logCPM <- cpm(dge, log=TRUE, prior.count = 3)
+boxplot(logCPM[,1:10], main='CBTTC Brain Tumor',
+ylab = "Log 2 Expression or Gene Expression")
+# the total number of samples that were profiled
+nrow(X)
+# the number of probes in the data set
+ncol(X)
+# construct design matrix
+race <- Y$Race
+design <- model.matrix(~-1+race)
+head(design)
+# change column names
+colnames(design) <- c("Native", "Asian", "Black",
+"Hawaiian", "White")
+# change column names
+colnames(design) <- c("Black", "White")
+# think we should also filter out the 'More Than One Race'
+Y <- filter(Y, Race != "More Than One Race" )
+race <- Y$Race
+table(race)
+design <- model.matrix(~-1 + race)
+colnames(design) <- c("Alaskan Native", "Asian", "African American",
+"Hawaiian Native", "Caucasian")
+head(design)
+fit <- lmFit(logCPM, design)
+design <- model.matrix(~-1 + race)
+colnames(design) <- c("Alaskan Native", "Asian")
+# fit the linear model to each row of the expression matrix
+fit <- lmFit(logCPM, design)
+# construct design matrix filtering out the 'More Than One Race' results
+Y <- filter(Y, Race != "More Than One Race" )
+race <- Y$Race
+table(race)
+# change column names
+design <- model.matrix(~-1 + race)
+colnames(design) <- c("Alaskan Native", "Asian", "African American",
+"Hawaiian Native", "Caucasian")
+head(design)
+# fit the linear model to each row of the expression matrix
+fit <- lmFit(logCPM, design)
+library(dplyr)
+library(ggplot2)
+library(UCSCXenaTools) # needed to retreive data
+library(edgeR) # needed for processing, such as TMM
+library(limma) # needed to find DE probes
+data(XenaData)
+# limit to desired cohort
+blca <- XenaData %>% filter(XenaCohorts == 'GDC TCGA Bladder Cancer (BLCA)')
+# Get the phenotype / clinical data
+cli_query = blca %>%
+filter(Label == "Phenotype") %>%  # select clinical dataset
+XenaGenerate() %>%  # generate a XenaHub object
+XenaQuery() %>%     # generate the query
+XenaDownload()      # download the data
+# prepare (load) the data into R
+blca_pheno <- XenaPrepare(cli_query)
+# Get the RNA-seq data, including the "probe map"
+cli_query <- blca %>% filter(Label == 'HTSeq - Counts') %>%
+XenaGenerate() %>%  # generate a XenaHub object
+XenaQuery() %>%
+XenaDownload(download_probeMap = TRUE)
+# prepare (load) the data into R
+blca_counts <- XenaPrepare(cli_query)
+X <- data.frame(blca_counts$TCGA.BLCA.htseq_counts.tsv.gz)
+rownames(X) <- X$Ensembl_ID
+X <- X[,-1]  # remove the probe name column
+# probeMap = probe names
+probeMap <- blca_counts$gencode.v22.annotation.gene.probeMap
+# Y = pheno data
+Y <- blca_pheno
+# 'change '.' to '-' so sample ID format is consistent
+colnames(X) <- gsub('\\.', '-', colnames(X))
+# Keep only the '01A' tumor samples
+g <- grep('01A$', colnames(X))
+X <- X[,g]
+# match expression data to clinical data
+common_samples <- intersect(colnames(X), Y$submitter_id.samples)
+mx <- match(common_samples, colnames(X))
+my <- match(common_samples, Y$submitter_id.samples)
+X <- X[,mx]
+Y <- Y[my,]
+# Make sure that the samples match -- if they don't, this will produce an error
+stopifnot(all(colnames(X) == Y$submitter_id.samples))
+# convert from log2(count + 1) to count data
+X <- round(2**X - 1)
+# remove genes with low counts
+dge <- DGEList(counts=X)
+keep <- filterByExpr(dge,min.prop = .10 )
+dge <- dge[keep,,keep.lib.sizes=FALSE]
+# apply TMM normalization, which computes the normalization
+# factors. The actual normalization is done in a later step
+dge <- calcNormFactors(dge, method = "TMM")
+# Calculate the log CPM values, using the normalization factors;
+# 3 counts are added to each observation to prevent log 0 values
+logCPM <- cpm(dge, log = TRUE, prior.count = 3)
+gender = Y$gender.demographic
+design = model.matrix(~-1+gender)
+colnames(design) = c("Female", "Male")
+#logCPM = b1*1 + b2*0
+#b1 is the mean expression for females
+b1 = mean(design[,1])
+b1
+#b2 is the mean expression for males
+b2 = mean(design[,2])
+b2
+fit = lmFit(logCPM, design)
+probe = match('ENSG00000215704.8', rownames(fit$coefficients))
+probe
+View(logCPM)
+View(design)
+library(dplyr)
+library(ggplot2)
+library(UCSCXenaTools) # needed to retrieve data
+library(edgeR) # needed for processing, such as TMM
+library(limma) # needed to find DE probes
+library(class) # for knn
+data(XenaData)
+# limit to desired cohort
+cbttc <- XenaData %>% filter(XenaCohorts == 'Pediatric Brain Tumor Atlas: CBTTC')
+# Get the clinical data
+cli_query = cbttc %>%
+filter(Label == "Participants information") %>%  # select clinical dataset
+XenaGenerate() %>%  # generate a XenaHub object
+XenaQuery() %>%     # generate the query
+XenaDownload()      # download the data
+# prepare (load) the data into R
+cbttc_part = XenaPrepare(cli_query)
+# Get the RSEM expected_count
+# instead of HTSeq - Counts in our case
+cli_query <- cbttc %>% filter(Label == 'RSEM expected_count') %>%
+XenaGenerate() %>%  # generate a XenaHub object
+XenaQuery() %>%
+XenaDownload(download_probeMap = TRUE)
+# prepare (load) the data into R
+cbttc_counts <- XenaPrepare(cli_query)
+# do you guy's think we should keep the gene ID's, such as,
+# 'ENSG00000000003.14_TSPAN6' for the rows because as we continue, we lose them
+# and we just have the row numbers
+X <- data.frame(cbttc_counts$CBTTC_rsem.genes_expected_count.txt.gz)
+rownames(X) <- X$Ensembl_ID
+# probeMap = probe names
+probeMap <- cbttc_counts$cavaticaKidsFirst_gencode.v27.primary_assembly.annotation.gene.probemap
+# participants info
+Y <- cbttc_part
+# remove dots and replace with dashes for formatting consistancy
+colnames(X) <- gsub('\\.', '-', colnames(X))
+# filter out unknown races
+Y <- filter(Y, Race != 'Reported Unknown')
+# match expression data to clinical data
+common_samples <- intersect(colnames(X), Y$xena_sample)
+mx <- match(common_samples, colnames(X))
+my <- match(common_samples, Y$xena_sample)
+X <- X[,mx]
+Y <- Y[my,]
+# Make sure that the samples match -- if they don't, this will produce an error
+stopifnot(all(colnames(X) == Y$xena_sample))
+# Removing genes with lower counts
+dge <- DGEList(counts = X)
+keep <- filterByExpr(dge,  min.prop = .10)
+dge <- dge[keep,,keep.lib.sizes=FALSE]
+# Applying normalization
+dge <- calcNormFactors(dge, method = 'TMM')
+# Calculating logCPM values
+logCPM <- cpm(dge, log=TRUE, prior.count = 3)
+boxplot(logCPM[,1:10], main='CBTTC Brain Tumor',
+ylab = "Log 2 Expression or Gene Expression")
+# the total number of samples that were profiled
+nrow(X)
+# the number of probes in the data set
+ncol(X)
+# construct design matrix filtering out the 'More Than One Race' results
+Y <- filter(Y, Race != "More Than One Race" )
+View(X)
+View(Y)
+# Extract column from phenotype data that contains the categories we want to compare
+Y$Race
+# Output the number of samples in each group
+rownum(raceData$White)
+table(raceData)
+# Extract column from phenotype data that contains the categories we want to compare
+raceData <- Y$Race
+table(raceData)
+# Extract column from phenotype data that contains the categories we want to compare
+table(Y$Race)
+# Extracts the column from phenotype data we're interested in
+Y$Race
+# Displays the number of samples in each group
+table(Y$Race)
